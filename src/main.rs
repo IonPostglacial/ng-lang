@@ -3,5 +3,5 @@ use crate::lang::{parsing::parse_string, lexing::Code, lexing::CodeOrigin::Inter
 mod lang;
 
 fn main() {
-    println!("parsed: {:?}", parse_string(&Code { origin: Interactive, text: "fun(n as list[int]) n" }))
+    println!("parsed: {:?}", parse_string(&Code { origin: Interactive, text: "record Point(x: int, y: int)" }))
 }

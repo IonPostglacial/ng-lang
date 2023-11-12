@@ -96,6 +96,11 @@ pub struct ForExpr<'a> {
 }
 
 #[derive(Clone, Debug)]
+pub struct LoopExpr<'a> {
+    pub body: Expression<'a>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Param {
     pub name: Intern<Symbol>,
     pub type_id: Option<Intern<TypeExpr>>,
@@ -105,6 +110,12 @@ pub struct Param {
 pub struct FunExpr<'a> {
     pub params: Vec<Param>,
     pub body: Expression<'a>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RecordExpr {
+    pub name: Intern<Symbol>,
+    pub params: Vec<Param>,
 }
 
 #[derive(Debug, Clone)]
@@ -120,7 +131,11 @@ pub enum ExpressionKind<'a> {
     If(Box<IfExpr<'a>>),
     IfElse(Box<IfElseExpr<'a>>),
     For(Box<ForExpr<'a>>),
+    Loop(Box<LoopExpr<'a>>),
+    Break,
+    Continue,
     Fun(Box<FunExpr<'a>>),
+    Record(Box<RecordExpr>),
     Call(Box<CallExpr<'a>>),
     Index(Box<IndexExpr<'a>>),
     Seq(Vec<Expression<'a>>),
@@ -381,8 +396,8 @@ fn parse_type(lexer: &mut Lexer, code: &Code, start: usize) -> Result<Intern<Typ
 }
 
 fn try_parse_type(lexer: &mut Lexer, code: &Code, start: usize) -> Result<Option<Intern<TypeExpr>>, ParsingError> {
-    let type_id = if let Some(maybe_as) = lexer.peek(code) {
-        if maybe_as.str(code.text) == "as" {
+    let type_id = if let Some(maybe_colon) = lexer.peek(code) {
+        if maybe_colon.kind == TokenKind::Punctuation(Punctuation::Colon) {
             lexer.next(code);
             Some(parse_type(lexer, code, start)?)
         } else {
@@ -398,6 +413,65 @@ fn parse_param(lexer: &mut Lexer, code: &Code, start: usize) -> Result<Param, Pa
     let name = parse_word(lexer, code)?;
     let type_id = try_parse_type(lexer, code, start)?;
     Ok(Param { name, type_id })
+}
+
+fn parse_loop<'a>(lexer: &mut Lexer, code: &'a Code, start: usize) -> Result<Expression<'a>, ParsingError> {
+    let body = parse_tokens(lexer, code, 0)?;
+    Ok(Expression { 
+        kind: ExpressionKind::Loop(Box::new(LoopExpr { body })), 
+        span: CodeSpan { start, end: lexer.current_position() } 
+    })
+}
+
+fn parse_break<'a>(lexer: &mut Lexer, start: usize) -> Expression<'a> {
+    Expression { 
+        kind: ExpressionKind::Break, 
+        span: CodeSpan { start, end: lexer.current_position() } 
+    }
+}
+
+fn parse_continue<'a>(lexer: &mut Lexer, start: usize) -> Expression<'a> {
+    Expression { 
+        kind: ExpressionKind::Continue, 
+        span: CodeSpan { start, end: lexer.current_position() } 
+    }
+}
+
+fn parse_params<'a>(lexer: &mut Lexer, code: &'a Code, start: usize) -> Result<Vec<Param>, ParsingError> {
+    let parens = expect_next_token(lexer, code, start)?;
+    if parens.str(code.text) != "(" {
+        return Err(ParsingError { 
+            span: CodeLocation { origin: code.origin.clone(), span: CodeSpan { start, end: lexer.current_position() } },
+            kind: ParsingErrorKind::WrongToken(format!("Expected '(', got: '{}'", parens.str(code.text)))
+        })?
+    }
+    let mut params: Vec<Param> = Vec::new();
+    while let Some(tok) = lexer.peek(code) {
+        match tok.kind {
+            TokenKind::Close(p) if p == ParensKind::Regular => {
+                lexer.next(code);
+                break;
+            }
+            _ => {
+                let inter = expect_peek_token(lexer, code, start)?;
+                if inter.kind == TokenKind::Punctuation(Punctuation::Comma) {
+                    lexer.next(code);
+                } else {
+                    params.push(parse_param(lexer, code, start)?)
+                }
+            }
+        }
+    }
+    Ok(params)
+}
+
+fn parse_record<'a>(lexer: &mut Lexer, code: &'a Code, start: usize) -> Result<Expression<'a>, ParsingError> {
+    let name = parse_word(lexer, code)?;
+    let params = parse_params(lexer, code, start)?;
+    Ok(Expression { 
+        kind: ExpressionKind::Record(Box::new(RecordExpr { name, params })), 
+        span: CodeSpan { start, end: lexer.current_position() } 
+    })
 }
 
 fn expect_is_token(lexer: &mut Lexer, code: &Code, tok: Option<Token>, start: usize) -> Result<Token, ParsingError> {
@@ -450,52 +524,24 @@ fn parse_tokens<'a>(lexer: &mut Lexer, code: &'a Code, min_bp: u8) -> Result<Exp
         TokenKind::Close(_) => todo!(),
         TokenKind::Keyword(kw) => {
             match kw {
-                Keyword::Def => {
-                    parse_def_expression(lexer, code, min_bp, start)?
-                }
-                Keyword::Set => {
-                    parse_set_expression(lexer, code, min_bp, start)?
-                }
+                Keyword::Def => parse_def_expression(lexer, code, min_bp, start)?,
+                Keyword::Set => parse_set_expression(lexer, code, min_bp, start)?,
                 Keyword::Fun => {
-                    let parens = expect_next_token(lexer, code, start)?;
-                    if parens.str(code.text) != "(" {
-                        return Err(ParsingError { 
-                            span: CodeLocation { origin: code.origin.clone(), span: CodeSpan { start, end: lexer.current_position() } },
-                            kind: ParsingErrorKind::WrongToken(format!("Expected '(', got: '{}'", parens.str(code.text)))
-                        })?
-                    }
-                    let mut params: Vec<Param> = Vec::new();
-                    while let Some(tok) = lexer.peek(code) {
-                        match tok.kind {
-                            TokenKind::Close(p) if p == ParensKind::Regular => {
-                                lexer.next(code);
-                                break;
-                            }
-                            _ => {
-                                let inter = expect_peek_token(lexer, code, start)?;
-                                if inter.kind == TokenKind::Punctuation(Punctuation::Comma) {
-                                    lexer.next(code);
-                                } else {
-                                    params.push(parse_param(lexer, code, start)?)
-                                }
-                            }
-                        }
-                    }
+                    let params = parse_params(lexer, code, start)?;
                     let body = parse_tokens(lexer, code, min_bp)?;
                     Expression { 
                         kind: ExpressionKind::Fun(Box::new(FunExpr { params, body })), 
                         span: CodeSpan { start, end: lexer.current_position() } 
                     }
                 }
-                Keyword::If => {
-                    parse_if(lexer, code, min_bp, start)?
-                }
+                Keyword::If => parse_if(lexer, code, min_bp, start)?,
                 Keyword::Else => todo!(),
-                Keyword::For => {
-                    parse_for(lexer, code, min_bp, start)?
-                }
+                Keyword::For => parse_for(lexer, code, min_bp, start)?,
                 Keyword::In => todo!(),
-                Keyword::As => todo!(),
+                Keyword::Loop => parse_loop(lexer, code, start)?,
+                Keyword::Break => parse_break(lexer, start),
+                Keyword::Continue => parse_continue(lexer, start),
+                Keyword::Record => parse_record(lexer, code, start)?,
             }
         }
         TokenKind::Punctuation(_) => {

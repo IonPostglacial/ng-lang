@@ -32,12 +32,12 @@ pub enum ParensKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Keyword {
-    Def, Set, Fun, If, Else, For, In, As,
+    Def, Set, If, Else, For, In, Loop, Break, Continue, Fun, Record,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Punctuation {
-    Semicolon, Comma,
+    Semicolon, Comma, Colon,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,7 +91,7 @@ fn is_operator(ch: char) -> bool {
 
 fn is_punctuation(ch: char) -> bool {
     match ch {
-        ',' | ';' => true,
+        ',' | ';' | ':' => true,
         _ => false,
     }
 }
@@ -170,12 +170,15 @@ impl Lexer {
                 "or" | "and" | "not" => TokenKind::Operator,
                 "def" => TokenKind::Keyword(Keyword::Def),
                 "set" => TokenKind::Keyword(Keyword::Set),
-                "fun" => TokenKind::Keyword(Keyword::Fun),
                 "if" => TokenKind::Keyword(Keyword::If),
                 "else" => TokenKind::Keyword(Keyword::Else),
                 "for" => TokenKind::Keyword(Keyword::For),
                 "in" => TokenKind::Keyword(Keyword::In),
-                "as" => TokenKind::Keyword(Keyword::As),
+                "loop" => TokenKind::Keyword(Keyword::Loop),
+                "break" => TokenKind::Keyword(Keyword::Break),
+                "continue" => TokenKind::Keyword(Keyword::Continue),
+                "fun" => TokenKind::Keyword(Keyword::Fun),
+                "record" => TokenKind::Keyword(Keyword::Record),
                 _ => TokenKind::Word,
             },
             span: CodeSpan { start, end }
@@ -227,6 +230,7 @@ impl Lexer {
             kind: match ch {
                 ';' => TokenKind::Punctuation(Punctuation::Semicolon),
                 ',' => TokenKind::Punctuation(Punctuation::Comma),
+                ':' => TokenKind::Punctuation(Punctuation::Colon),
                 _ => todo!(),
             } })
     }
