@@ -1,0 +1,22 @@
+record Point(x: Int, y: Int)
+
+def a = b[1, 2] * 3 + 4 * sqrt(5)
+
+if true {
+    "yes"
+} else {
+    "no"
+}
+
+for i in range(0, 10) {
+    print(i)
+}
+
+def id = fun(n) n
+
+def test = fun(points: List[Point]) { 
+    loop { 
+        if len(points) < 3 break; 
+        print(points[2].x) 
+    }
+}

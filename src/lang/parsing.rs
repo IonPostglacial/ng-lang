@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::{Debug, Display}, error::Error};
 
 use crate::lang::lexing::{CodeLocation, Code, CodeSpan, Keyword, Lexer, ParensKind, Token, TokenKind};
 use internment::Intern;
@@ -159,6 +159,15 @@ pub struct ParsingError {
     pub span: CodeLocation,
     pub kind: ParsingErrorKind,
 }
+
+impl Display for ParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+
+impl Error for ParsingError {}
 
 fn token_to_operator(op: &Token, code: &Code) -> Result<BinaryOperator, ParsingError> {
     match op.str(code.text) {
@@ -587,5 +596,11 @@ fn parse_tokens<'a>(lexer: &mut Lexer, code: &'a Code, min_bp: u8) -> Result<Exp
 
 pub fn parse_string<'a>(code: &'a Code) -> Result<Expression<'a>, ParsingError> {
     let mut lexer = Lexer::new();
-    parse_tokens(&mut lexer, &code, 0)
+    let mut expressions = parse_sep_delimited_expressions(&mut lexer, code, ParensKind::Squigly, Punctuation::Semicolon, 0)?;
+    if expressions.len() == 1 {
+        Ok(expressions.pop().unwrap())
+    } else {
+        Ok(Expression { kind: ExpressionKind::Seq(expressions), span: CodeSpan { start: 0, end: lexer.current_position() }})
+    }
+    //parse_tokens(&mut lexer, &code, 0)
 }

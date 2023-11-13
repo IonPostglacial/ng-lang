@@ -1,10 +1,10 @@
-use std::{str::Chars, iter::Peekable, path::Path};
+use std::{str::Chars, iter::Peekable, path::PathBuf};
 
 
 #[derive(Debug, Clone)]
 pub enum CodeOrigin {
     Interactive,
-    File(Box<Path>)
+    File(PathBuf)
 }
 
 #[derive(Debug, Clone)]
